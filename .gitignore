@@ -176,3 +176,20 @@ installer_files/
 # Streamlit runtime logs from OneKeyStart.bat
 logs/
 videolingo_*.log
+
+# Private local settings and temporary runtime files
+config.local.yaml
+.env.*
+cookies*.txt
+*.tmp
+*.temp
+*.srt
+*.mp4
+*.mkv
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.safetensors
+*.pt
+*.pth

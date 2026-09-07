@@ -1,6 +1,17 @@
 import json
 from core.utils import *
 
+
+def _format_video_style_section(video_style):
+    style = str(video_style or "").strip()
+    if not style:
+        return ""
+    return f"""
+
+### User Video Context / Style Guidance
+{style}"""
+
+
 ## ================================================================
 # @ step4_splitbymeaning.py
 def get_split_prompt(sentence, num_parts = 2, word_limit = 20):
@@ -50,7 +61,7 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
 
 ## ================================================================
 # @ step4_1_summarize.py
-def get_summary_prompt(source_content, custom_terms_json=None):
+def get_summary_prompt(source_content, custom_terms_json=None, video_style=None):
     src_lang = get_source_language()
     tgt_lang = load_key("target_language")
     
@@ -62,6 +73,8 @@ def get_summary_prompt(source_content, custom_terms_json=None):
             terms_list.append(f"- {term['src']}: {term['tgt']} ({term['note']})")
         terms_note = "\n### Existing Terms\nPlease exclude these terms in your extraction:\n" + "\n".join(terms_list)
     
+    style_note = _format_video_style_section(video_style)
+
     summary_prompt = f"""
 ## Role
 You are a video translation expert and terminology consultant, specializing in {src_lang} comprehension and {tgt_lang} expression optimization.
@@ -72,7 +85,7 @@ For the provided {src_lang} video text:
 2. Extract professional terms/names with {tgt_lang} translations (excluding existing terms)
 3. Provide brief explanation for each term
 
-{terms_note}
+{terms_note}{style_note}
 
 Steps:
 1. Topic Summary:
@@ -125,8 +138,8 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
 
 ## ================================================================
 # @ step5_translate.py & translate_lines.py
-def generate_shared_prompt(previous_content_prompt, after_content_prompt, summary_prompt, things_to_note_prompt):
-    return f'''### Context Information
+def generate_shared_prompt(previous_content_prompt, after_content_prompt, summary_prompt, things_to_note_prompt, video_style=None):
+    shared_prompt = f'''### Context Information
 <previous_content>
 {previous_content_prompt}
 </previous_content>
@@ -140,16 +153,34 @@ def generate_shared_prompt(previous_content_prompt, after_content_prompt, summar
 
 ### Points to Note
 {things_to_note_prompt}'''
+    return shared_prompt + _format_video_style_section(video_style)
 
-def get_prompt_faithfulness(lines, shared_prompt):
+def get_prompt_faithfulness(lines, shared_prompt, item_ids=None):
     TARGET_LANGUAGE = load_key("target_language")
     # Split lines by \n
     line_splits = lines.split('\n')
+    ids = [str(i) for i in range(1, len(line_splits) + 1)] if item_ids is None else [str(item_id) for item_id in item_ids]
+    if len(ids) != len(line_splits):
+        raise ValueError("item_ids must match the number of subtitle lines")
     
     json_dict = {}
-    for i, line in enumerate(line_splits, 1):
-        json_dict[f"{i}"] = {"origin": line, "direct": f"direct {TARGET_LANGUAGE} translation {i}."}
+    for position, (item_id, line) in enumerate(zip(ids, line_splits), start=1):
+        placeholder = (
+            f"direct {TARGET_LANGUAGE} translation {position}."
+            if item_ids is None
+            else f"direct {TARGET_LANGUAGE} translation for {item_id}."
+        )
+        json_dict[item_id] = {"origin": line, "direct": placeholder}
     json_format = json.dumps(json_dict, indent=2, ensure_ascii=False)
+    subtitles_input = (
+        lines
+        if item_ids is None
+        else json.dumps(
+            [{"id": item_id, "text": line} for item_id, line in zip(ids, line_splits)],
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     src_language = get_source_language()
     prompt_faithfulness = f'''
@@ -174,7 +205,7 @@ We have a segment of original {src_language} subtitles that need to be directly 
 
 ## INPUT
 <subtitles>
-{lines}
+{subtitles_input}
 </subtitles>
 
 ## Output in only JSON format and no other text
@@ -187,18 +218,29 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
     return prompt_faithfulness.strip()
 
 
-def get_prompt_expressiveness(faithfulness_result, lines, shared_prompt):
+def get_prompt_expressiveness(faithfulness_result, lines, shared_prompt, item_ids=None):
     TARGET_LANGUAGE = load_key("target_language")
+    ids = list(faithfulness_result) if item_ids is None else [str(item_id) for item_id in item_ids]
     json_format = {
         key: {
-            "origin": value["origin"],
-            "direct": value["direct"],
+            "origin": faithfulness_result[key]["origin"],
+            "direct": faithfulness_result[key]["direct"],
             "reflect": "your reflection on direct translation",
             "free": "your free translation"
         }
-        for key, value in faithfulness_result.items()
+        for key in ids
     }
     json_format = json.dumps(json_format, indent=2, ensure_ascii=False)
+    line_splits = lines.split('\n')
+    subtitles_input = (
+        lines
+        if item_ids is None
+        else json.dumps(
+            [{"id": item_id, "text": line} for item_id, line in zip(ids, line_splits)],
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     src_language = get_source_language()
     prompt_expressiveness = f'''
@@ -234,7 +276,7 @@ Please use a two-step thinking process to handle the text line by line:
    
 ## INPUT
 <subtitles>
-{lines}
+{subtitles_input}
 </subtitles>
 
 ## Output in only JSON format and no other text

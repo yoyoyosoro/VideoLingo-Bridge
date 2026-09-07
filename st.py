@@ -14,6 +14,14 @@ import streamlit as st
 from core.st_utils.imports_and_utils import *
 from core.st_utils.task_runner import TaskRunner
 from core import *
+from core.subtitle_input import (
+    clear_task_input_state,
+    combined_source_text,
+    has_official_source,
+    load_source_srt,
+    save_structured_cues,
+    translate_and_write_official_subtitles,
+)
 from translations.translations import DISPLAY_LANGUAGES, init_display_language, set_display_language
 from core.utils.models import _TEXT_DONE_MARKER, _AUDIO_DONE_MARKER
 
@@ -26,6 +34,12 @@ st.set_page_config(page_title="VideoLingo", page_icon="docs/logo.svg")
 
 SUB_VIDEO = "output/output_sub.mp4"
 DUB_VIDEO = "output/output_dub.mp4"
+SUBTITLE_DOWNLOAD_LABELS = {
+    "src.srt": "Original",
+    "trans.srt": "Translation",
+    "src_trans.srt": "Original + Translation",
+    "trans_src.srt": "Translation + Original",
+}
 
 
 # ─── Task control UI (auto-refreshes every 1s while task is active) ───
@@ -119,8 +133,35 @@ def _clear_path(path):
             pass
 
 
-def _get_text_steps():
+def _get_text_steps(official_cues=None, video_style=""):
     """Return the subtitle processing steps as (label, callable) list."""
+    if official_cues is not None:
+        frozen_cues = tuple(official_cues)
+        source_content = combined_source_text(frozen_cues)
+        return [
+            (
+                t("Summarize official subtitles and extract terminology"),
+                lambda: (
+                    save_structured_cues(frozen_cues),
+                    _4_1_summarize.get_summary(
+                        source_content=source_content,
+                        video_style=video_style,
+                    ),
+                ),
+            ),
+            (
+                t("Translate official subtitles and generate SRT files"),
+                lambda: translate_and_write_official_subtitles(
+                    frozen_cues,
+                    video_style=video_style,
+                ),
+            ),
+            (
+                t("Finalize subtitle outputs"),
+                lambda: _touch(_TEXT_DONE_MARKER),
+            ),
+        ]
+
     steps = [
         (t("WhisperX word-level transcription"), _2_asr.transcribe),
         (
@@ -132,7 +173,10 @@ def _get_text_steps():
         ),
         (
             t("Summarization and multi-step translation"),
-            lambda: (_4_1_summarize.get_summary(), _4_2_translate.translate_all()),
+            lambda: (
+                _4_1_summarize.get_summary(video_style=video_style),
+                _4_2_translate.translate_all(video_style=video_style),
+            ),
         ),
         (
             t("Cutting and aligning long subtitles"),
@@ -151,6 +195,40 @@ def _get_text_steps():
         ),
     ]
     return steps
+
+
+def _render_subtitle_download_controls():
+    filenames = list(SUBTITLE_DOWNLOAD_LABELS)
+    download_col, select_col = st.columns([1, 2], vertical_alignment="bottom")
+    with select_col:
+        selected_files = st.multiselect(
+            t("Subtitle files in ZIP"),
+            options=filenames,
+            default=filenames,
+            format_func=lambda filename: t(SUBTITLE_DOWNLOAD_LABELS[filename]),
+            key="_subtitle_zip_selection",
+        )
+        if not selected_files:
+            st.warning(t("Select at least one subtitle type."))
+
+    with download_col:
+        if selected_files:
+            download_subtitle_zip_button(
+                text=t("Download subtitle ZIP"),
+                selected_files=selected_files,
+            )
+        else:
+            st.button(
+                t("Download subtitle ZIP"),
+                key="_disabled_subtitle_zip_download",
+                disabled=True,
+                use_container_width=True,
+            )
+
+
+def _archive_current_task():
+    cleanup()
+    clear_task_input_state(st.session_state)
 
 
 def _subtitle_length_controls():
@@ -226,11 +304,25 @@ def text_processing_section():
     runner = TaskRunner.get(st.session_state, "_text_runner")
     from core._1_ytdlp import is_audio_only_input
     audio_only = is_audio_only_input()
+    official_mode = has_official_source()
 
     with st.container(border=True):
-        final_text_step = t("Generate subtitle files") if audio_only else t("Merging subtitles into the video")
-        st.markdown(
-            f"""
+        if official_mode:
+            st.markdown(
+                f"""
+        <p style='font-size: 20px;'>
+        {t("Official SRT mode: preserve source cues and skip Whisper / ASR.")}
+        <p style='font-size: 20px;'>
+            1. {t("Summarize official subtitles and extract terminology")}<br>
+            2. {t("Translate official subtitles and generate SRT files")}<br>
+            3. {t("Finalize subtitle outputs")}
+        """,
+                unsafe_allow_html=True,
+            )
+        else:
+            final_text_step = t("Generate subtitle files") if audio_only else t("Merging subtitles into the video")
+            st.markdown(
+                f"""
         <p style='font-size: 20px;'>
         {t("This stage includes the following steps:")}
         <p style='font-size: 20px;'>
@@ -240,8 +332,8 @@ def text_processing_section():
             4. {t("Cutting and aligning long subtitles")}<br>
             5. {final_text_step}
         """,
-            unsafe_allow_html=True,
-        )
+                unsafe_allow_html=True,
+            )
 
         text_done = os.path.exists(_TEXT_DONE_MARKER) or (
             os.path.exists("output/trans.srt")
@@ -250,27 +342,70 @@ def text_processing_section():
         )
 
         if not text_done:
+            video_style = st.text_area(
+                t("Video context / translation style (optional)"),
+                key="_video_style_input",
+                height=120,
+                disabled=runner.state != "idle",
+                help=t(
+                    "Describe the video background, terminology, tone, and preferred translation style."
+                ),
+            )
+            source_srt_error = st.session_state.get("_source_srt_error")
+            if source_srt_error:
+                st.error(t("Invalid SRT: {error}").replace("{error}", source_srt_error))
+
             if runner.is_active:
                 _task_control_panel("_text_runner")
             elif runner.is_done:
                 _task_control_panel("_text_runner")
             else:
-                _subtitle_length_controls()
+                if not official_mode:
+                    _subtitle_length_controls()
                 if st.button(
-                    t("Start Processing Subtitles"), key="text_processing_button"
+                    t("Start Processing Subtitles"),
+                    key="text_processing_button",
+                    disabled=bool(source_srt_error),
                 ):
+                    style_snapshot = str(video_style or "").strip()
+                    st.session_state["_video_style_snapshot"] = style_snapshot
                     _clear_path(_TEXT_DONE_MARKER)
-                    steps = _get_text_steps()
+                    if official_mode:
+                        try:
+                            official_cues = tuple(load_source_srt())
+                        except (OSError, ValueError) as exc:
+                            st.session_state["_source_srt_error"] = str(exc)
+                            st.error(
+                                t("Invalid SRT: {error}").replace("{error}", str(exc))
+                            )
+                            return None
+                        source_language = load_key("whisper.language")
+                        if source_language == "auto":
+                            st.error(
+                                t(
+                                    "Official SRT mode requires an explicit Recog Lang because ASR is skipped."
+                                )
+                            )
+                            return None
+                        update_key("whisper.detected_language", source_language)
+                        steps = _get_text_steps(
+                            official_cues=official_cues,
+                            video_style=style_snapshot,
+                        )
+                    else:
+                        steps = _get_text_steps(video_style=style_snapshot)
                     runner.start(steps)
                     st.rerun()
         else:
             if not audio_only and load_key("burn_subtitles") and os.path.exists(SUB_VIDEO):
                 st.video(SUB_VIDEO)
-            download_subtitle_zip_button(text=t("Download All Srt Files"))
+            _render_subtitle_download_controls()
 
-            if st.button(t("Archive to 'history'"), key="cleanup_in_text_processing"):
-                cleanup()
-                st.rerun()
+            st.button(
+                t("Archive to 'history'"),
+                key="cleanup_in_text_processing",
+                on_click=_archive_current_task,
+            )
             return True
 
 
@@ -349,9 +484,11 @@ def audio_processing_section():
                 _clear_path(_AUDIO_DONE_MARKER)
                 delete_dubbing_files()
                 st.rerun()
-            if st.button(t("Archive to 'history'"), key="cleanup_in_audio_processing"):
-                cleanup()
-                st.rerun()
+            st.button(
+                t("Archive to 'history'"),
+                key="cleanup_in_audio_processing",
+                on_click=_archive_current_task,
+            )
 
 
 # ─── Main ───
@@ -393,7 +530,7 @@ def main():
     if download_video_section():
         text_done = text_processing_section()
         from core._1_ytdlp import is_audio_only_input
-        if text_done and not is_audio_only_input():
+        if text_done and not is_audio_only_input() and not has_official_source():
             audio_processing_section()
 
 

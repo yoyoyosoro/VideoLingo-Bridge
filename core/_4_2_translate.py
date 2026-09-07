@@ -39,11 +39,19 @@ def get_after_content(chunks, chunk_index):
     return None if chunk_index == len(chunks) - 1 else chunks[chunk_index + 1].split('\n')[:2] # Get first 2 lines
 
 # 🔍 Translate a single chunk
-def translate_chunk(chunk, chunks, theme_prompt, i):
+def translate_chunk(chunk, chunks, theme_prompt, i, video_style=None):
     things_to_note_prompt = search_things_to_note_in_prompt(chunk)
     previous_content_prompt = get_previous_content(chunks, i)
     after_content_prompt = get_after_content(chunks, i)
-    translation, english_result = translate_lines(chunk, previous_content_prompt, after_content_prompt, things_to_note_prompt, theme_prompt, i)
+    translation, english_result = translate_lines(
+        chunk,
+        previous_content_prompt,
+        after_content_prompt,
+        things_to_note_prompt,
+        theme_prompt,
+        i,
+        video_style=video_style,
+    )
     return i, english_result, translation
 
 # Add similarity calculation function
@@ -52,7 +60,7 @@ def similar(a, b):
 
 # 🚀 Main function to translate all chunks
 @check_file_exists(_4_2_TRANSLATION)
-def translate_all():
+def translate_all(video_style=None):
     console.print("[bold green]Start Translating All...[/bold green]")
     chunks = split_chunks_by_chars(chunk_size=600, max_i=10)
     with open(_4_1_TERMINOLOGY, 'r', encoding='utf-8') as file:
@@ -64,7 +72,14 @@ def translate_all():
         with concurrent.futures.ThreadPoolExecutor(max_workers=load_key("max_workers")) as executor:
             futures = []
             for i, chunk in enumerate(chunks):
-                future = executor.submit(translate_chunk, chunk, chunks, theme_prompt, i)
+                future = executor.submit(
+                    translate_chunk,
+                    chunk,
+                    chunks,
+                    theme_prompt,
+                    i,
+                    video_style,
+                )
                 futures.append(future)
             results = []
             try:

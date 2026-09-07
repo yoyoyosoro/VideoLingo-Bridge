@@ -30,8 +30,12 @@ def search_things_to_note_in_prompt(sentence):
     else:
         return None
 
-def get_summary():
-    src_content = combine_chunks()
+def get_summary(source_content=None, video_style=None):
+    src_content = (
+        combine_chunks()
+        if source_content is None
+        else str(source_content)[:load_key('summary_length')]
+    )
     custom_terms = pd.read_excel(CUSTOM_TERMS_PATH)
     custom_terms_json = {
         "terms": 
@@ -47,7 +51,11 @@ def get_summary():
     if len(custom_terms) > 0:
         rprint(f"📖 Custom Terms Loaded: {len(custom_terms)} terms")
         rprint("📝 Terms Content:", json.dumps(custom_terms_json, indent=2, ensure_ascii=False))
-    summary_prompt = get_summary_prompt(src_content, custom_terms_json)
+    summary_prompt = get_summary_prompt(
+        src_content,
+        custom_terms_json,
+        video_style=video_style,
+    )
     rprint("📝 Summarizing and extracting terminology ...")
     
     def valid_summary(response_data):
