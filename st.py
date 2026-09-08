@@ -24,6 +24,7 @@ from core.subtitle_input import (
 )
 from translations.translations import DISPLAY_LANGUAGES, init_display_language, set_display_language
 from core.utils.models import _TEXT_DONE_MARKER, _AUDIO_DONE_MARKER
+from core.utils.config_utils import load_key, update_key
 
 # SET PATH
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -199,22 +200,29 @@ def _get_text_steps(official_cues=None, video_style=""):
 
 def _render_subtitle_download_controls():
     filenames = list(SUBTITLE_DOWNLOAD_LABELS)
+    try:
+        saved_selection = load_key("subtitle_download_selection")
+    except KeyError:
+        saved_selection = filenames
+        update_key("subtitle_download_selection", saved_selection, create=True)
     download_col, select_col = st.columns([1, 2], vertical_alignment="bottom")
     with select_col:
         selected_files = st.multiselect(
-            t("Subtitle files in ZIP"),
+            t("Subtitle files to download"),
             options=filenames,
-            default=filenames,
+            default=[name for name in saved_selection if name in filenames],
             format_func=lambda filename: t(SUBTITLE_DOWNLOAD_LABELS[filename]),
             key="_subtitle_zip_selection",
         )
+        if selected_files != saved_selection:
+            update_key("subtitle_download_selection", selected_files)
         if not selected_files:
             st.warning(t("Select at least one subtitle type."))
 
     with download_col:
         if selected_files:
             download_subtitle_zip_button(
-                text=t("Download subtitle ZIP"),
+                text=t("Download subtitle SRT" if len(selected_files) == 1 else "Download subtitle ZIP"),
                 selected_files=selected_files,
             )
         else:

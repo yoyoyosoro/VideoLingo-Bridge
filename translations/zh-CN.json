@@ -66,6 +66,8 @@
     "Video context / translation style (optional)": "视频背景 / 翻译风格（可选）",
     "Describe the video background, terminology, tone, and preferred translation style.": "填写视频背景、术语、语气和期望的翻译风格。",
     "Download subtitle ZIP": "下载字幕 ZIP",
+    "Download subtitle SRT": "下载字幕 SRT",
+    "Subtitle files to download": "选择下载的字幕",
     "Subtitle files in ZIP": "ZIP 中包含的字幕",
     "Original": "原文",
     "Translation": "译文",

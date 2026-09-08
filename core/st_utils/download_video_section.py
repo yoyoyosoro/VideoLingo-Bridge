@@ -227,7 +227,7 @@ def download_video_section():
             media_path = os.path.join(OUTPUT_DIR, clean_name)
             media_ext = ext.lower().lstrip(".")
             media_type = "video" if media_ext in load_key("allowed_video_formats") else "audio"
-            write_input_manifest(media_path, media_type)
+            write_input_manifest(media_path, media_type, original_name=uploaded_file.name)
 
             st.session_state["_processed_upload_id"] = upload_id
             st.rerun()

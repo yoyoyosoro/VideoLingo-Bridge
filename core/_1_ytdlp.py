@@ -69,12 +69,23 @@ def download_video_ytdlp(url, save_path='output', resolution='1080'):
     media_file = find_video_files(save_path)
     write_input_manifest(media_file, "video", save_path)
 
-def write_input_manifest(media_file: str, media_type: str, save_path='output'):
+def write_input_manifest(media_file: str, media_type: str, save_path='output', original_name=None):
     os.makedirs(save_path, exist_ok=True)
     manifest_path = os.path.join(save_path, INPUT_MANIFEST)
     media_path = media_file.replace("\\", "/") if sys.platform.startswith('win') else media_file
     with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump({"path": media_path, "type": media_type}, f, ensure_ascii=False, indent=2)
+        json.dump({"path": media_path, "type": media_type, "original_name": original_name}, f, ensure_ascii=False, indent=2)
+
+
+def get_input_download_name(save_path='output'):
+    media_file, _ = find_media_file(save_path)
+    manifest_path = os.path.join(save_path, INPUT_MANIFEST)
+    if os.path.exists(manifest_path):
+        with open(manifest_path, encoding="utf-8") as f:
+            original_name = json.load(f).get("original_name")
+        if original_name:
+            return original_name
+    return os.path.basename(media_file)
 
 def _read_input_manifest(save_path='output'):
     manifest_path = os.path.join(save_path, INPUT_MANIFEST)

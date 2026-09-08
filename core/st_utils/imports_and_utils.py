@@ -1,22 +1,23 @@
 import os
 import streamlit as st
 from core.st_utils.download_video_section import download_video_section
-from core.subtitle_zip import build_subtitle_zip_bytes
+from core.subtitle_zip import build_subtitle_download
+from core._1_ytdlp import get_input_download_name
 from core.st_utils.sidebar_setting import page_setting
 from translations.translations import translate as t
 
 def download_subtitle_zip_button(text: str, selected_files):
     try:
-        zip_data = build_subtitle_zip_bytes("output", selected_files)
+        data, filename, mime = build_subtitle_download("output", selected_files, get_input_download_name())
     except (ValueError, FileNotFoundError) as exc:
         st.error(str(exc))
         return False
 
     return st.download_button(
         label=text,
-        data=zip_data,
-        file_name="subtitles.zip",
-        mime="application/zip",
+        data=data,
+        file_name=filename,
+        mime=mime,
         use_container_width=True,
     )
 
