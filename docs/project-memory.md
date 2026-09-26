@@ -5,6 +5,13 @@
 - GitHub：`https://github.com/yoyoyosoro/VideoLingo-Custom`，分支 `custom`。
 - 仅修改明确要求的范围；本地 API 配置不随功能提交上传。
 
+## 下载、分享与恢复
+- 修改版从 `custom` 分支下载：`https://github.com/yoyoyosoro/VideoLingo-Custom/archive/refs/heads/custom.zip`；也可打开仓库，选择 `custom`，点击 `Code → Download ZIP`。
+- 分支 ZIP 随后续推送更新；需要复现固定版本时使用对应提交。
+- 源码下载不依赖 Releases。源码 ZIP 不是免安装包，新电脑仍需安装运行环境、依赖并填写自己的 API 配置。
+- GitHub 可恢复已提交的源码与项目文档，不包含未上传的个人配置、视频、字幕输出或本地运行环境。
+- 分享仓库链接或源码 ZIP 即可交付源码；私有仓库链接需要接收者拥有访问权限。
+
 ## 字幕功能约定
 - 官方 SRT 的编号、时间、顺序和源文本保持原样；翻译使用稳定 cue ID，官方模式跳过 ASR、重新切分和配音。
 - 视频风格在任务开始时固定；始终生成四种字幕，下载选择只影响导出。
