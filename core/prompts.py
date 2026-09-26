@@ -15,7 +15,7 @@ def _format_video_style_section(video_style):
 ## ================================================================
 # @ step4_splitbymeaning.py
 def get_split_prompt(sentence, num_parts = 2, word_limit = 20):
-    language = get_source_language()
+    language = load_key("whisper.detected_language")
     split_prompt = f"""
 ## Role
 You are a professional Netflix subtitle splitter in **{language}**.
@@ -62,7 +62,7 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
 ## ================================================================
 # @ step4_1_summarize.py
 def get_summary_prompt(source_content, custom_terms_json=None, video_style=None):
-    src_lang = get_source_language()
+    src_lang = load_key("whisper.detected_language")
     tgt_lang = load_key("target_language")
     
     # add custom terms note
@@ -182,7 +182,7 @@ def get_prompt_faithfulness(lines, shared_prompt, item_ids=None):
         )
     )
 
-    src_language = get_source_language()
+    src_language = load_key("whisper.detected_language")
     prompt_faithfulness = f'''
 ## Role
 You are a professional Netflix subtitle translator, fluent in both {src_language} and {TARGET_LANGUAGE}, as well as their respective cultures. 
@@ -242,7 +242,7 @@ def get_prompt_expressiveness(faithfulness_result, lines, shared_prompt, item_id
         )
     )
 
-    src_language = get_source_language()
+    src_language = load_key("whisper.detected_language")
     prompt_expressiveness = f'''
 ## Role
 You are a professional Netflix subtitle translator and language consultant.
@@ -293,7 +293,7 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
 # @ step6_splitforsub.py
 def get_align_prompt(src_sub, tr_sub, src_part):
     targ_lang = load_key("target_language")
-    src_lang = get_source_language()
+    src_lang = load_key("whisper.detected_language")
     src_splits = src_part.split('\n')
     num_parts = len(src_splits)
     src_part = src_part.replace('\n', ' [br] ')
@@ -404,3 +404,4 @@ Clean the given text by:
 
 Note: Start you answer with ```json and end with ```, do not add any other text.
 '''.strip()
+
