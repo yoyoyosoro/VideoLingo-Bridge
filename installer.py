@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import importlib
 import importlib.metadata as metadata
+import io
 import json
 import os
 import platform
@@ -24,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 
@@ -36,6 +38,17 @@ TORCH_INDEX = "https://download.pytorch.org/whl"
 BOOTSTRAP_PACKAGES = ["requests", "rich", "ruamel.yaml", "InquirerPy", "packaging"]
 FILTERED_REQUIREMENTS = {"torch", "torchaudio", "torchvision"}
 DEMUCS_REQUIREMENT = "demucs>=4.1.0,<5"
+
+# These data files are not included in the Python wheels.  Provision them in
+# the same per-user location NLTK searches on Windows so a fresh install does
+# not attempt an untrusted runtime download during a task.
+NLTK_DATA_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "nltk_data"
+NLTK_DATA_PACKAGES = {
+    "punkt_tab": ("tokenizers", "punkt_tab"),
+    "cmudict": ("corpora", "cmudict"),
+    "averaged_perceptron_tagger": ("taggers", "averaged_perceptron_tagger"),
+    "averaged_perceptron_tagger_eng": ("taggers", "averaged_perceptron_tagger_eng"),
+}
 
 
 def run(cmd: list[str], retries: int = 0, env: dict[str, str] | None = None) -> None:
@@ -81,6 +94,53 @@ def soft_pip_install(packages: list[str], retries: int = 1, extra_args: list[str
     except Exception as exc:
         print(f"  Warning: optional install failed: {exc}")
         return False
+
+
+def missing_nltk_resources() -> list[str]:
+    """Return NLTK package names that the app's text/audio paths require."""
+    try:
+        import nltk
+    except ImportError:
+        return ["nltk"]
+
+    missing: list[str] = []
+    for name, (category, path) in NLTK_DATA_PACKAGES.items():
+        try:
+            nltk.data.find(f"{category}/{path}")
+        except LookupError:
+            missing.append(name)
+    return missing
+
+
+def _extract_nltk_archive(payload: bytes, destination: Path) -> None:
+    """Extract a trusted NLTK archive without allowing path traversal."""
+    destination.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        root = destination.resolve()
+        for member in archive.infolist():
+            target = (destination / member.filename).resolve()
+            if not target.is_relative_to(root):
+                raise ValueError(f"Refusing unsafe NLTK archive path: {member.filename}")
+        archive.extractall(destination)
+
+
+def install_nltk_data() -> None:
+    """Install tokenizer, pronunciation and POS data needed by VideoLingo."""
+    import requests
+
+    missing = missing_nltk_resources()
+    if not missing:
+        print("  NLTK data already installed.")
+        return
+    print(f"\n[post] Install NLTK data: {', '.join(missing)}")
+    for name in missing:
+        category, path = NLTK_DATA_PACKAGES[name]
+        destination = NLTK_DATA_DIR / category
+        url = f"https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/{category}/{name}.zip"
+        response = requests.get(url, timeout=120)
+        response.raise_for_status()
+        _extract_nltk_archive(response.content, destination)
+    print(f"  NLTK data installed in {NLTK_DATA_DIR}")
 
 
 def package_version(name: str) -> str | None:
@@ -397,6 +457,8 @@ def health_check(quiet: bool = False, require_demucs: bool = False, check_state:
         warnings.append("Noto CJK fonts are not installed; CJK subtitle burn-in may fail")
     if not shutil.which("ffmpeg"):
         errors.append("ffmpeg not found in PATH")
+    for resource in missing_nltk_resources():
+        errors.append(f"missing NLTK data: {resource}")
     builds = {(package_version(name) or "").partition("+")[2] or "cpu" for name in ("torch", "torchaudio", "torchvision")}
     if len(builds) != 1:
         errors.append("torch, torchaudio and torchvision must use the same CPU/CUDA build")
@@ -448,6 +510,7 @@ def install_all(args: argparse.Namespace) -> int:
     if not args.skip_demucs:
         install_demucs(force=args.force or args.upgrade, require=args.require_demucs)
     install_project_metadata()
+    install_nltk_data()
     install_linux_noto_fonts()
     ffmpeg_ok = check_ffmpeg()
     save_state()

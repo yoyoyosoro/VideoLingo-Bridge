@@ -37,4 +37,8 @@ syllables>=1.1.5,<2
 pypinyin>=0.55,<1
 g2p-en>=2.1,<3
 xmltodict>=1.0.4,<2
+nltk>=3.9,<4
 
+
+# faster-whisper 1.2.1 uses av.open(metadata_errors=...), removed in PyAV 19.
+av>=16.1,<17
