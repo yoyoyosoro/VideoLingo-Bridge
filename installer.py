@@ -39,15 +39,16 @@ BOOTSTRAP_PACKAGES = ["requests", "rich", "ruamel.yaml", "InquirerPy", "packagin
 FILTERED_REQUIREMENTS = {"torch", "torchaudio", "torchvision"}
 DEMUCS_REQUIREMENT = "demucs>=4.1.0,<5"
 
-# These data files are not included in the Python wheels.  Provision them in
-# the same per-user location NLTK searches on Windows so a fresh install does
-# not attempt an untrusted runtime download during a task.
-NLTK_DATA_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "nltk_data"
+# These data files are not included in the Python wheels. Keep them beside the
+# selected virtual environment; NLTK searches this location automatically and
+# the files stay isolated from other Python installations.
+NLTK_DATA_DIR = Path(sys.prefix) / "nltk_data"
 NLTK_DATA_PACKAGES = {
     "punkt_tab": ("tokenizers", "punkt_tab"),
-    "cmudict": ("corpora", "cmudict"),
-    "averaged_perceptron_tagger": ("taggers", "averaged_perceptron_tagger"),
-    "averaged_perceptron_tagger_eng": ("taggers", "averaged_perceptron_tagger_eng"),
+    # g2p-en checks these two legacy resources by their zip package name.
+    "cmudict": ("corpora", "cmudict.zip"),
+    "averaged_perceptron_tagger": ("taggers", "averaged_perceptron_tagger.zip"),
+    "averaged_perceptron_tagger_eng": ("taggers", "averaged_perceptron_tagger_eng.zip"),
 }
 
 
@@ -116,10 +117,12 @@ def _extract_nltk_archive(payload: bytes, destination: Path) -> None:
     """Extract a trusted NLTK archive without allowing path traversal."""
     destination.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-        root = destination.resolve()
+        root = os.path.normcase(os.path.abspath(str(destination)))
         for member in archive.infolist():
-            target = (destination / member.filename).resolve()
-            if not target.is_relative_to(root):
+            target = os.path.normcase(os.path.normpath(
+                os.path.abspath(os.path.join(str(destination), member.filename))
+            ))
+            if os.path.commonpath((root, target)) != root:
                 raise ValueError(f"Refusing unsafe NLTK archive path: {member.filename}")
         archive.extractall(destination)
 
@@ -129,17 +132,24 @@ def install_nltk_data() -> None:
     import requests
 
     missing = missing_nltk_resources()
-    if not missing:
+    pending = [
+        name for name, (category, path) in NLTK_DATA_PACKAGES.items()
+        if name in missing
+        or not (NLTK_DATA_DIR / category / path).exists()
+        or not (NLTK_DATA_DIR / category / f"{name}.zip").is_file()
+    ]
+    if not pending:
         print("  NLTK data already installed.")
         return
-    print(f"\n[post] Install NLTK data: {', '.join(missing)}")
-    for name in missing:
+    print(f"\n[post] Install NLTK data: {', '.join(pending)}")
+    for name in pending:
         category, path = NLTK_DATA_PACKAGES[name]
         destination = NLTK_DATA_DIR / category
         url = f"https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/{category}/{name}.zip"
         response = requests.get(url, timeout=120)
         response.raise_for_status()
         _extract_nltk_archive(response.content, destination)
+        (destination / f"{name}.zip").write_bytes(response.content)
     print(f"  NLTK data installed in {NLTK_DATA_DIR}")
 
 

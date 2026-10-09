@@ -55,8 +55,8 @@ def test_fresh_install_can_split_sentences_without_runtime_download(monkeypatch,
         'Hello world.', 'This is a test.',
     ]
     assert not installer.missing_nltk_resources()
-    nltk.data.find('corpora/cmudict')
-    nltk.data.find('taggers/averaged_perceptron_tagger')
+    nltk.data.find('corpora/cmudict.zip')
+    nltk.data.find('taggers/averaged_perceptron_tagger.zip')
     # Rerunning setup with complete data must work offline.
     monkeypatch.setattr(requests, 'get', lambda *a, **k: pytest.fail('Unexpected download'))
     installer.install_nltk_data()
