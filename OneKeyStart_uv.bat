@@ -2,6 +2,7 @@
 chcp 65001 >nul
 setlocal EnableExtensions EnableDelayedExpansion
 cd /D "%~dp0"
+set "PATH=%~dp0runtime\ffmpeg7\ffmpeg-n7.1.1-56-gc2184b65d2-win64-gpl-shared-7.1\bin;%~dp0.venv\Lib\site-packages\torch\lib;%PATH%"
 
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
@@ -61,6 +62,17 @@ set "EXIT_CODE=1"
 goto finish
 
 :venv_found
+for /f "tokens=1,* delims==" %%A in ('findstr /B /C:"home =" ".venv\pyvenv.cfg" 2^>nul') do set "VENV_HOME=%%B"
+if defined VENV_HOME if not exist "!VENV_HOME!\python.exe" (
+    echo The venv base Python is missing. Recreating the project environment...
+    set "UV_EXE=%USERPROFILE%\.local\bin\uv.exe"
+    if not exist "!UV_EXE!" set "UV_EXE=uv"
+    "!UV_EXE!" python install 3.13
+    if errorlevel 1 goto finish
+    "!UV_EXE!" venv --seed --clear --python 3.13 ".venv"
+    if errorlevel 1 goto finish
+    set "VENV_PY=.venv\Scripts\python.exe"
+)
 echo Detected %VENV_LABEL%: %VENV_PY%
 "%VENV_PY%" -c "import streamlit" >> "%LOGFILE%" 2>&1
 if errorlevel 1 (

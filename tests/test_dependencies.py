@@ -263,6 +263,21 @@ def test_setup_recreation_confirmation(monkeypatch, tmp_path, yes):
         assert not removed and not commands
 
 
+def test_setup_recreates_venv_when_uv_base_python_is_missing(tmp_path):
+    setup_spec = importlib.util.spec_from_file_location('setup_env', ROOT / 'setup_env.py')
+    setup = importlib.util.module_from_spec(setup_spec)
+    setup_spec.loader.exec_module(setup)
+    scripts = tmp_path / 'Scripts'
+    scripts.mkdir()
+    python_exe = scripts / 'python.exe'
+    python_exe.write_bytes(b'launcher')
+    (tmp_path / 'pyvenv.cfg').write_text(
+        'home = C:/missing/uv/python/cpython-3.13.16-windows-x86_64-none\n',
+        encoding='utf-8',
+    )
+    assert not setup.python_version_ok(python_exe)
+
+
 def test_setup_forwards_backend_without_installing(monkeypatch):
     setup_spec = importlib.util.spec_from_file_location('setup_env', ROOT / 'setup_env.py')
     setup = importlib.util.module_from_spec(setup_spec)

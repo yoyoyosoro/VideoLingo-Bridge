@@ -93,6 +93,18 @@ def venv_bin(venv_path: Path) -> Path:
 def python_version_ok(python_exe: Path) -> bool:
     if not python_exe.is_file():
         return False
+    # A Windows venv launcher can still exist after uv has removed the base
+    # interpreter it points to.  Treat that environment as broken before
+    # trying to run pip or the installer through the stale launcher.
+    cfg = python_exe.parent.parent / "pyvenv.cfg"
+    if cfg.is_file():
+        home = next(
+            (line.split("=", 1)[1].strip() for line in cfg.read_text(encoding="utf-8").splitlines()
+             if line.lower().startswith("home =")),
+            None,
+        )
+        if home and not (Path(home) / ("python.exe" if platform.system() == "Windows" else "bin/python")).is_file():
+            return False
     result = subprocess.run([str(python_exe), "--version"], capture_output=True, text=True)
     return f"Python {PYTHON_VERSION}." in (result.stdout or result.stderr)
 

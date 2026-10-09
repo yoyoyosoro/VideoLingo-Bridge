@@ -3,6 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
 set "PYTHONUTF8=1"
 cd /D "%~dp0"
+set "PATH=%~dp0runtime\ffmpeg7\ffmpeg-n7.1.1-56-gc2184b65d2-win64-gpl-shared-7.1\bin;%~dp0.venv\Lib\site-packages\torch\lib;%PATH%"
 
 for /F "tokens=1,2 delims=#" %%A in ('"prompt #$H#$E# & echo on & for %%B in (1) do rem"') do set "ESC=%%B"
 set "C_RESET=%ESC%[0m"
@@ -72,6 +73,17 @@ echo   python setup_env.py
 goto end
 
 :venv_found
+for /f "tokens=1,* delims==" %%A in ('findstr /B /C:"home =" ".venv\pyvenv.cfg" 2^>nul') do set "VENV_HOME=%%B"
+if defined VENV_HOME if not exist "!VENV_HOME!\python.exe" (
+    echo %C_YELLOW%The venv base Python is missing. Recreating the project environment...%C_RESET%
+    set "UV_EXE=%USERPROFILE%\.local\bin\uv.exe"
+    if not exist "!UV_EXE!" set "UV_EXE=uv"
+    "!UV_EXE!" python install 3.13
+    if errorlevel 1 goto install_failed
+    "!UV_EXE!" venv --seed --clear --python 3.13 ".venv"
+    if errorlevel 1 goto install_failed
+    set "VENV_PY=.venv\Scripts\python.exe"
+)
 for %%I in ("%VENV_PY%") do set "PATH=%%~dpI;%PATH%"
 echo %C_GREEN%Detected %VENV_LABEL%:%C_RESET% %VENV_PY%
 "%VENV_PY%" installer.py --check --quiet
