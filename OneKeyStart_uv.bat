@@ -62,7 +62,7 @@ set "EXIT_CODE=1"
 goto finish
 
 :venv_found
-for /f "tokens=1,* delims==" %%A in ('findstr /B /C:"home =" ".venv\pyvenv.cfg" 2^>nul') do set "VENV_HOME=%%B"
+for /f "tokens=1,* delims==" %%A in ('findstr /B /C:"home =" ".venv\pyvenv.cfg" 2^>nul') do for /f "tokens=* delims= " %%C in ("%%B") do set "VENV_HOME=%%C"
 if defined VENV_HOME if not exist "!VENV_HOME!\python.exe" (
     echo The venv base Python is missing. Recreating the project environment...
     set "UV_EXE=%USERPROFILE%\.local\bin\uv.exe"
