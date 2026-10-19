@@ -1,4 +1,6 @@
-# VideoLingo Custom
+# VideoLingo Bridge
+
+连接官方字幕、翻译风格与多种 AI 模型的 VideoLingo 增强版。
 
 本仓库是基于 [Huanshere/VideoLingo](https://github.com/Huanshere/VideoLingo) 的个人自定义版，日常使用 **`custom` 分支**。原项目说明保留在下方；自定义版的使用方法和更新摘要以本节为准。
 

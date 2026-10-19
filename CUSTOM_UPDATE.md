@@ -1,7 +1,7 @@
 # 自定义版维护
 
 - `upstream`：官方 https://github.com/Huanshere/VideoLingo.git
-- `origin`：自己的 GitHub 私有仓库（以 `git remote -v` 为准）。
+- `origin`：自己的公开仓库 https://github.com/yoyoyosoro/VideoLingo-Bridge.git（以 `git remote -v` 为准）。
 - `main`：只跟随官方；`custom`：日常使用的自定义版。
 - 当前开发目录：`D:\VideoLingo-dev`。旧目录与旧分支不参与日常开发。
 - 三项改造：上传官方 SRT、跳过 ASR 并保留时间轴；视频背景 / 翻译风格输入；ZIP 多选原文、译文、原文 + 译文、译文 + 原文。

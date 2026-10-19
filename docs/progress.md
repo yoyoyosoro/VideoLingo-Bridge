@@ -5,7 +5,7 @@
 ## 当前交付内容
 - 在 `D:\VideoLingo-dev` 的 `custom` 汇总多协议 API、CC Switch 逻辑模型 / 六档推理、Provider / 映射缓存隔离及中英文界面。
 - README 已补充自定义功能、安装启动、CC Switch 使用、更新摘要和验证边界；维护说明修正开发位置与真实配置保护步骤。
-- 此前 PyAV、NLTK 与虚拟环境修复已在提交 `a09d0f2` 至 `53ffa03` 中；本轮将已有未提交功能与说明交付到同一私有仓库。
+- 此前 PyAV、NLTK 与虚拟环境修复已在提交 `a09d0f2` 至 `53ffa03` 中；多模型接入和说明已提交为 `2851f7b`。仓库现以公开项目 VideoLingo Bridge 维护。
 - 真实 `config.yaml` 和个人 Provider 审计 / 验收记录仅留本机，不进入提交。
 
 ## 已实现
