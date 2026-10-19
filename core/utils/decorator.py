@@ -7,7 +7,7 @@ from rich import print as rprint
 # retry decorator
 # ------------------------------
 
-def except_handler(error_msg, retry=0, delay=1, default_return=None):
+def except_handler(error_msg, retry=0, delay=1, default_return=None, no_retry=()):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -17,6 +17,8 @@ def except_handler(error_msg, retry=0, delay=1, default_return=None):
                     return func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
+                    if isinstance(e, no_retry):
+                        raise
                     rprint(f"[red]{error_msg}: {e}, retry: {i+1}/{retry}[/red]")
                     if i == retry:
                         if default_return is not None:

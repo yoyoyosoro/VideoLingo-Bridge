@@ -2,28 +2,30 @@ import streamlit as st
 import requests
 from translations.translations import translate as t
 from core.utils import *
+from core.utils.llm_api import (CC_SWITCH_URL, reasoning_profile, configured_reasoning,
+                                configured_model, openai_base_url, openai_headers)
 
 
-def config_input(label, key, help=None, placeholder=None):
+def config_input(label, key, help=None, placeholder=None, default=None):
     """Generic config input handler"""
-    val = st.text_input(label, value=load_key(key), help=help, placeholder=placeholder)
-    if val != load_key(key):
-        update_key(key, val)
+    current = load_key_or(key, default) if default is not None else load_key(key)
+    val = st.text_input(label, value=current, help=help, placeholder=placeholder)
+    if val != current:
+        update_key(key, val, create=default is not None)
     return val
 
 
-def _fetch_model_list(base_url, api_key):
+def _fetch_model_list(base_url, api_key, protocol="openai"):
     """Fetch available models from OpenAI-compatible /v1/models endpoint."""
-    if not api_key or not base_url:
+    if protocol == "cc_switch" or not api_key or not base_url:
         return []
-    url = base_url.rstrip("/")
-    if not url.endswith("/v1"):
-        url += "/v1"
+    url = openai_base_url(base_url)
     url += "/models"
     try:
-        resp = requests.get(
-            url, headers={"Authorization": f"Bearer {api_key}"}, timeout=10
-        )
+        headers = ({"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+                   if protocol == "anthropic" else {"Authorization": f"Bearer {api_key}"})
+        headers.update(openai_headers(base_url, api_key))
+        resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         data = resp.json().get("data", [])
         return sorted([m["id"] for m in data if "id" in m])
@@ -55,92 +57,159 @@ def page_setting():
     #     config_input(t("Cookies Path"), "youtube.cookies_path")
 
     with st.expander(t("LLM Configuration"), expanded=True):
-        config_input(t("API_KEY"), "api.key", placeholder=t("Enter your API key"))
-        config_input(
-            t("BASE_URL"),
-            "api.base_url",
-            help=t("Openai format, will add /v1/chat/completions automatically"),
+        protocols = ["openai", "anthropic", "cc_switch"]
+        current_protocol = load_key_or("api.protocol", "openai")
+        protocol = st.selectbox(
+            t("API Connection"), protocols,
+            index=protocols.index(current_protocol) if current_protocol in protocols else 0,
+            format_func=lambda value: {"openai": "OpenAI Compatible",
+                                      "anthropic": "Claude Messages API",
+                                      "cc_switch": "CC Switch · Claude Code"}[value],
         )
+        if protocol != current_protocol:
+            update_key("api.protocol", protocol, create=True)
+            st.session_state.pop("_model_list", None)
+            st.session_state.pop("model_searchbox", None)
+            st.rerun()
+
+        if protocol == "cc_switch":
+            config_input(t("CC Switch Local URL"), "api.cc_switch_url", default=CC_SWITCH_URL)
+            st.caption(t("Manage the provider and API key in CC Switch's Claude Code page and start local routing. Claude Desktop uses its own provider."))
+        else:
+            config_input(t("API_KEY"), "api.key", placeholder=t("Enter your API key"))
+            config_input(
+                t("BASE_URL"), "api.base_url",
+                help=t("Native Claude Messages API; appends /v1/messages automatically")
+                if protocol == "anthropic" else t("Openai format, will add /v1/chat/completions automatically"),
+            )
 
         # Try to use searchbox for model selection, fall back to text_input
-        try:
-            from streamlit_searchbox import st_searchbox
-            from streamlit_searchbox import _list_to_options_js, _list_to_options_py
-
-            if st.button(
-                t("Fetch Model List"), key="fetch_models", use_container_width=True
-            ):
-                with st.spinner(t("Fetching models...")):
-                    models = _fetch_model_list(
-                        load_key("api.base_url"), load_key("api.key")
-                    )
-                    st.session_state["_model_list"] = models
-                    if models:
-                        # Update searchbox internal state directly so dropdown shows options
-                        sb_key = "model_searchbox"
-                        if sb_key in st.session_state:
-                            st.session_state[sb_key]["options_js"] = (
-                                _list_to_options_js(models)
-                            )
-                            st.session_state[sb_key]["options_py"] = (
-                                _list_to_options_py(models)
-                            )
-                        st.toast(
-                            t("Fetched {n} models").replace("{n}", str(len(models))),
-                            icon="✅",
-                        )
-                    else:
-                        st.toast(
-                            t(
-                                "Failed to fetch models, please check API Key and Base URL"
-                            ),
-                            icon="❌",
-                        )
-
-            current_model = load_key("api.model")
-            model_list = st.session_state.get("_model_list", None)
-
-            sb_key = "model_searchbox"
-            selected = st_searchbox(
-                _search_models,
-                placeholder=t("Search or enter model name"),
-                default=current_model if current_model else None,
-                default_searchterm=current_model if current_model else "",
-                default_use_searchterm=True,
-                default_options=model_list if model_list else None,
-                key=sb_key,
-                clear_on_submit=False,
+        model_key = "api.cc_switch_model" if protocol == "cc_switch" else "api.model"
+        current_model = configured_model(load_key_or, load_key, protocol)
+        if protocol == "cc_switch":
+            routing_models = ["opus", "sonnet", "haiku"]
+            selected_model = st.selectbox(
+                t("Logical Routing Model"), routing_models,
+                index=routing_models.index(current_model) if current_model in routing_models else 1,
+                key="cc_switch_model",
+                help=t("CC Switch maps this logical model to the active provider's model."),
             )
-            if selected and selected != load_key("api.model"):
-                update_key("api.model", selected)
-
+            if selected_model != current_model:
+                update_key(model_key, selected_model, create=True)
             if st.button("📡 " + t("Check API"), key="api", use_container_width=True):
                 with st.spinner(t("Check API") + "..."):
                     is_valid = check_api()
-                st.toast(
-                    t("API Key is valid") if is_valid else t("API Key is invalid"),
-                    icon="✅" if is_valid else "❌",
-                )
-        except ImportError:
-            c1, c2 = st.columns([4, 1])
-            with c1:
-                config_input(
-                    t("MODEL"),
-                    "api.model",
-                    help=t("click to check API validity") + " 👉",
+                st.toast(t("API Key is valid") if is_valid else t("API Key is invalid"),
+                         icon="✅" if is_valid else "❌")
+        else:
+            try:
+                from streamlit_searchbox import st_searchbox
+                from streamlit_searchbox import _list_to_options_js, _list_to_options_py
+
+                if st.button(
+                    t("Fetch Model List"), key="fetch_models", use_container_width=True,
+                    disabled=protocol == "cc_switch",
+                ):
+                    with st.spinner(t("Fetching models...")):
+                        models = _fetch_model_list(
+                            load_key("api.base_url"), load_key("api.key"), protocol
+                        )
+                        st.session_state["_model_list"] = models
+                        if models:
+                            # Update searchbox internal state directly so dropdown shows options
+                            sb_key = "model_searchbox"
+                            if sb_key in st.session_state:
+                                st.session_state[sb_key]["options_js"] = (
+                                    _list_to_options_js(models)
+                                )
+                                st.session_state[sb_key]["options_py"] = (
+                                    _list_to_options_py(models)
+                                )
+                            st.toast(
+                                t("Fetched {n} models").replace("{n}", str(len(models))),
+                                icon="✅",
+                            )
+                        else:
+                            st.toast(
+                                t(
+                                    "Failed to fetch models, please check API Key and Base URL"
+                                ),
+                                icon="❌",
+                            )
+
+                model_list = st.session_state.get("_model_list", None)
+
+                sb_key = "model_searchbox"
+                selected = st_searchbox(
+                    _search_models,
                     placeholder=t("Search or enter model name"),
+                    default=current_model if current_model else None,
+                    default_searchterm=current_model if current_model else "",
+                    default_use_searchterm=True,
+                    default_options=model_list if model_list else None,
+                    key=sb_key,
+                    clear_on_submit=False,
                 )
-            with c2:
-                if st.button("📡", key="api"):
-                    is_valid = check_api()
+                if selected and selected != load_key("api.model"):
+                    update_key("api.model", selected)
+
+                if st.button("📡 " + t("Check API"), key="api", use_container_width=True):
+                    with st.spinner(t("Check API") + "..."):
+                        is_valid = check_api()
                     st.toast(
                         t("API Key is valid") if is_valid else t("API Key is invalid"),
                         icon="✅" if is_valid else "❌",
                     )
+            except ImportError:
+                c1, c2 = st.columns([4, 1])
+                with c1:
+                    config_input(
+                        t("MODEL"),
+                        model_key,
+                        default=current_model,
+                        help=t("click to check API validity") + " 👉",
+                        placeholder=t("Search or enter model name"),
+                    )
+                with c2:
+                    if st.button("📡", key="api"):
+                        is_valid = check_api()
+                        st.toast(
+                            t("API Key is valid") if is_valid else t("API Key is invalid"),
+                            icon="✅" if is_valid else "❌",
+                        )
+        current_model = configured_model(load_key_or, load_key, protocol)
+        profile = reasoning_profile(current_model, protocol)
+        current_effort = configured_reasoning(load_key_or, current_model, protocol)
+        effort_labels = {"default": t("Auto / Default") if protocol == "cc_switch" else t("Model default"), "none": t("Thinking off"),
+                         "off": t("Thinking off"), "on": t("Thinking on"),
+                         "minimal": t("Minimal"), "low": t("Low"), "medium": t("Medium"),
+                         "high": t("High"), "xhigh": t("Very High") if protocol == "cc_switch" else t("Extra high"),
+                         "max": t("Maximum"), "maximum": t("Maximum")}
+        effort = st.selectbox(
+            t("Reasoning Effort"), profile["levels"],
+            index=profile["levels"].index(current_effort),
+            format_func=effort_labels.get, key="reasoning_" + profile["family"],
+            disabled=len(profile["levels"]) == 1,
+            help=t("CC Switch handles reasoning conversion. Auto uses provider defaults; Gemini Native currently omits explicit effort.")
+            if protocol == "cc_switch" else t("Options follow the current model's actual capabilities. Settings are saved separately for each model family."),
+        )
+        if effort != current_effort:
+            effort_key = "api.cc_switch_reasoning" if protocol == "cc_switch" else "api.reasoning_effort_" + profile["family"]
+            update_key(effort_key, effort, create=True)
+        if profile["note"]:
+            st.caption(t(profile["note"]))
+        if protocol == "cc_switch" or (protocol == "anthropic" and profile["family"] == "claude"):
+            current_cache = load_key_or("api.prompt_cache", True)
+            cache = st.toggle(t("Claude Prompt Cache"), value=current_cache,
+                              help=t("Caches stable instructions when the model's minimum prefix length is met; output tokens are still billed."))
+            if cache != current_cache:
+                update_key("api.prompt_cache", cache, create=True)
+
         llm_support_json = st.toggle(
             t("LLM JSON Format Support"),
             value=load_key("api.llm_support_json"),
             help=t("Enable if your LLM supports JSON mode output"),
+            disabled=protocol != "openai",
         )
         if llm_support_json != load_key("api.llm_support_json"):
             update_key("api.llm_support_json", llm_support_json)
@@ -349,6 +418,7 @@ def check_api():
             "This is a test, response 'message':'success' in json format.",
             resp_type="json",
             log_title="None",
+            use_cache=False,
         )
         return resp.get("message") == "success"
     except Exception:

@@ -1,3 +1,40 @@
+# VideoLingo Custom
+
+本仓库是基于 [Huanshere/VideoLingo](https://github.com/Huanshere/VideoLingo) 的个人自定义版，日常使用 **`custom` 分支**。原项目说明保留在下方；自定义版的使用方法和更新摘要以本节为准。
+
+## 自定义功能
+
+- **官方 SRT 翻译**：上传视频和官方 SRT，跳过 ASR，保留原字幕编号、时间轴、顺序和原文，生成译文及双语字幕。由于不运行 ASR，请明确选择源语言。
+- **视频背景 / 翻译风格**：处理前输入背景、术语和语气要求，传入摘要与翻译；任务开始后固定本次输入。
+- **灵活下载**：选择原文、译文、原文 + 译文、译文 + 原文。单选直接下载 SRT，多选下载 ZIP，空选禁用；选择保存在本机，文件名保留原始视频名称。
+- **多种 LLM 接入**：支持 OpenAI Compatible、Claude Messages API，以及 CC Switch 的 Claude Code 本地路由。Direct API 按模型家族提供推理选项，涵盖 GPT、Claude、DeepSeek、Gemini、MiMo；具体可用性取决于所选协议和上游支持。
+- **独立路由配置与缓存**：CC Switch 模型、推理档位与 Direct API 分开保存；本地答案缓存区分模型、协议、推理档位、Provider 和映射。路由状态不明、自动 failover 或请求期间切换时，不复用不确定的缓存。
+
+## 快速使用
+
+1. 获取 `custom` 分支源码，在项目目录运行 `python setup_env.py` 安装环境和依赖。
+2. Windows 双击 `OneKeyStart_uv.bat` 启动。已有环境可先运行 `OneKeyStart_uv.bat --check-only` 检查。
+3. 在侧栏选择 API 接入方式并配置自己的服务。上传媒体；有官方 SRT 时一并上传，填写可选的翻译风格后开始处理。
+4. 完成后选择字幕类型并下载。源码 ZIP 不包含本机环境、模型、真实 API 配置或运行产物。
+
+**使用 CC Switch：** 在其 Claude Code 页面启用 Local Routing，管理 Provider、真实 Key 和模型映射。在 VideoLingo 选择 CC Switch，默认入口为 `http://127.0.0.1:15721`，下拉选择 `sonnet`、`opus` 或 `haiku`；它们是逻辑角色，实际模型由 CC Switch 映射。VideoLingo 不调用 Claude Code CLI。
+
+推理档位为自动 / 默认、低、中、高、极高、最大。建议从自动档开始；显式档位表达请求意图，是否生效由 CC Switch 和上游决定。Prompt Cache 开关不保证上游命中或免除输出计费。
+
+## 更新摘要（2026-10-19）
+
+- 新增 Messages / CC Switch 接入、按模型能力显示的推理设置和中英文界面文案。
+- 增加六档 CC Switch 推理选择及独立逻辑模型下拉，支持由 Provider 映射到不同品牌模型。
+- 修正 Provider 或模型映射变化后的缓存隔离；记录 usage / stop reason，对截断、拒绝、空响应等明确错误停止无意义重试。
+- 纳入此前已提交的 PyAV 兼容、NLTK 数据放入虚拟环境，以及 uv 基础 Python 路径消失或含空格时的环境修复。
+- 保留官方 SRT、视频风格、字幕选择和下载命名功能。
+
+**验证边界：** 本次交付运行本地隔离回归，不额外请求付费 Provider。既有验收记录包含短字幕请求；不代表完整视频或多线程长任务验收。既有 CC Switch 4.0.9 验收记录显示，Gemini Native 会省略显式推理档位，特定 GPT 模型的最大档会降为 `xhigh`；这些限制由转换链决定。
+
+分支与后续官方同步见 [CUSTOM_UPDATE.md](CUSTOM_UPDATE.md)。本机配置和个人路由验收报告不上传。
+
+---
+
 <div align="center">
 
 <img src="/docs/logo.png" alt="VideoLingo Logo" height="140">

@@ -193,3 +193,7 @@ cookies*.txt
 *.safetensors
 *.pt
 *.pth
+
+# Local provider audit records (may contain personal endpoints and mappings)
+/cc-switch-audit.md
+/cc-switch-implementation.md

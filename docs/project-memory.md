@@ -1,9 +1,10 @@
 # 项目记忆
 
 ## 开发位置与仓库
-- 当前开发目录：`C:\Users\85472\VideoLingo-dev`；旧目录 `C:\Users\85472\VideoLingo` 保持不动。
+- 当前开发目录：`D:\VideoLingo-dev`；旧目录保持不动。
 - GitHub：`https://github.com/yoyoyosoro/VideoLingo-Custom`，分支 `custom`。
 - 仅修改明确要求的范围；本地 API 配置不随功能提交上传。
+- 仓库首页包含自定义功能与使用说明；`CUSTOM_UPDATE.md` 说明分支维护。部分克隆仅有 `custom`，同步官方前核对并按需补齐 `upstream` / `main`。
 
 ## 下载、分享与恢复
 - 修改版从 `custom` 分支下载：`https://github.com/yoyoyosoro/VideoLingo-Custom/archive/refs/heads/custom.zip`；也可打开仓库，选择 `custom`，点击 `Code → Download ZIP`。
@@ -20,3 +21,10 @@
 - 下载名称为 `类型丨原始视频名（去扩展名）.srt`；类型为 `src`、`tran`、`src_trans`、`trans_src`。
 - ZIP 名为 `subtitles丨原始视频名（去扩展名）.zip`；包内字幕遵循相同规则。
 - 上传时在现有输入清单中保存 `original_name`，保留空格和符号；旧任务缺少原名时回退当前媒体文件名。内部工作字幕文件名不变。
+
+## LLM 与路由约定
+- API 接入为 `openai`、`anthropic`、`cc_switch`；缺少协议字段时保持 OpenAI Compatible。Direct 模型能力逻辑与 CC Switch 逻辑档位分开。
+- CC Switch 使用 Claude Code namespace 的 localhost `/v1/messages`，不调用 CLI；真实 Key 和实际模型映射由 CC Switch 管理。逻辑模型下拉为 `opus` / `sonnet` / `haiku`。
+- CC Switch 独立保存模型与六档推理意图；自动档省略显式意图，最大档发送 API `max`。转换后的实际档位取决于 Provider 与 CC Switch。
+- 本地答案缓存包含模型、协议、档位及无凭据的路由身份；Provider / 映射变化失效，路由不明、failover 或请求期间切换时停用不确定缓存。
+- 个人路由审计与验收报告仅留本机；对外说明不得把短字幕、mock 或离线验证扩展为完整视频验收。
